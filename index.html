@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Генератор діаграм</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.6.0/Chart.bundle.min.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <h2 style="font-family: sans-serif; text-align: center">Генератор діаграм</h2>
+      <input id="titleInput" placeholder="Введіть заголовок для діаграми" />
+      <textarea
+        id="dataInput"
+        placeholder="Введіть значення через кому або кожне значення з нового рядка. // Треба порожній шаблон? Зробіть скільки потрібно порожніх рядків."
+      ></textarea>
+      <button id="submitBtn">Згенерувати</button>
+      <button id="saveBtn" style="display: none">Зберегти діаграму</button>
+      <canvas id="myChart" style="display: none" width="400" height="200"></canvas>
+    </div>
+  </body>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    textarea,
+    input {
+      width: 100%;
+      height: 100px;
+      margin-bottom: 10px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    input {
+      height: 20px;
+    }
+
+    button {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: none;
+      border-radius: 4px;
+      background-color: #28a745;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #218838;
+    }
+
+    canvas {
+      margin-top: 20px;
+      border: 1px solid #ccc;
+    }
+  </style>
+  <script>
+    Chart.defaults.doughnutLabels = Chart.helpers.clone(Chart.defaults.doughnut)
+
+    var helpers = Chart.helpers
+    var defaults = Chart.defaults
+
+    function wrapText(ctx, text, maxWidth) {
+      const words = text.split(' ')
+      const lines = []
+      let currentLine = words[0]
+
+      for (let i = 1; i < words.length; i++) {
+        const word = words[i]
+        const width = ctx.measureText(currentLine + ' ' + word).width
+        if (width < maxWidth) {
+          currentLine += ' ' + word
+        } else {
+          lines.push(currentLine)
+          currentLine = word
+        }
+      }
+      lines.push(currentLine)
+      return lines
+    }
+
+    Chart.controllers.doughnutLabels = Chart.controllers.doughnut.extend({
+      updateElement: function (arc, index, reset) {
+        var _this = this
+        var chart = _this.chart,
+          chartArea = chart.chartArea,
+          opts = chart.options,
+          animationOpts = opts.animation,
+          arcOpts = opts.elements.arc,
+          centerX = (chartArea.left + chartArea.right) / 2,
+          centerY = (chartArea.top + chartArea.bottom) / 2,
+          startAngle = opts.rotation, // non reset case handled later
+          endAngle = opts.rotation, // non reset case handled later
+          dataset = _this.getDataset(),
+          circumference =
+            reset && animationOpts.animateRotate
+              ? 0
+              : arc.hidden
+              ? 0
+              : _this.calculateCircumference(dataset.data[index]) * (opts.circumference / (2.0 * Math.PI)),
+          innerRadius = reset && animationOpts.animateScale ? 0 : _this.innerRadius,
+          outerRadius = reset && animationOpts.animateScale ? 0 : _this.outerRadius,
+          custom = arc.custom || {},
+          valueAtIndexOrDefault = helpers.getValueAtIndexOrDefault
+
+        helpers.extend(arc, {
+          // Utility
+          _datasetIndex: _this.index,
+          _index: index,
+
+          // Desired view properties
+          _model: {
+            x: centerX + chart.offsetX,
+            y: centerY + chart.offsetY,
+            startAngle: startAngle,
+            endAngle: endAngle,
+            circumference: circumference,
+            outerRadius: outerRadius,
+            innerRadius: innerRadius,
+            label: valueAtIndexOrDefault(dataset.label, index, chart.data.labels[index]),
+          },
+
+          draw: function () {
+            var ctx = this._chart.ctx
+            var vm = this._view
+            var sA = vm.startAngle
+            var eA = vm.endAngle
+            var opts = this._chart.config.options
+
+            // Draw segment
+            ctx.beginPath()
+            ctx.arc(vm.x, vm.y, vm.outerRadius, sA, eA)
+            ctx.arc(vm.x, vm.y, vm.innerRadius, eA, sA, true)
+            ctx.closePath()
+            ctx.strokeStyle = vm.borderColor
+            ctx.lineWidth = vm.borderWidth
+            ctx.fillStyle = vm.backgroundColor
+            ctx.fill()
+            ctx.lineJoin = 'bevel'
+
+            if (vm.borderWidth) {
+              ctx.stroke()
+            }
+
+            // Draw label if segment is large enough
+            if (vm.circumference > 0.0015) {
+              // Calculate the angle at which to place the label (middle of the segment)
+              var angle = sA + (eA - sA) / 2
+
+              // Calculate the radius at which to place the label
+              var labelRadius = (vm.outerRadius + vm.innerRadius) / 2
+
+              // Calculate label position
+              var labelX = vm.x + Math.cos(angle) * labelRadius
+              var labelY = vm.y + Math.sin(angle) * labelRadius
+
+              // Save the current context state
+              ctx.save()
+
+              // Move to the position where we want to draw the label
+              ctx.translate(labelX, labelY)
+
+              // Rotate the context so the text is readable from the outside
+              var rotationAngle = angle - Math.PI * 2 - 0.07
+              if (angle > Math.PI / 2 && angle < (3 * Math.PI) / 2) {
+                rotationAngle += Math.PI + 0.14
+              }
+              ctx.rotate(rotationAngle)
+
+              var responsiveFontSize = Math.max(10, Math.min(20, vm.outerRadius * 0.03))
+              ctx.font = helpers.fontString(responsiveFontSize, opts.defaultFontStyle, opts.defaultFontFamily)
+              ctx.fillStyle = '#000'
+              ctx.textBaseline = 'middle'
+              ctx.textAlign = 'center'
+
+              const maxWidth = vm.outerRadius * 0.6
+              const lines = wrapText(ctx, vm.label, maxWidth)
+              const lineHeight = responsiveFontSize * 0.9
+              const totalHeight = lineHeight * lines.length
+              const startY = -totalHeight / 3
+              lines.forEach((line, index) => {
+                const coefficient = lines.length / 2 - (index + 1) + 10
+                var rotAngle = +coefficient / 70 - 0.09
+                if (angle > Math.PI / 2 && angle < (3 * Math.PI) / 2) {
+                  rotAngle = -coefficient / 70 + 0.09
+                }
+                ctx.rotate(rotAngle)
+                ctx.fillText(line, 0, startY + (index * lineHeight + 4))
+              })
+
+              ctx.restore()
+            }
+            // Fill the central hole with black color
+            ctx.beginPath()
+            ctx.arc(vm.x, vm.y, vm.innerRadius, 0, Math.PI * 2)
+            ctx.fillStyle = '#000000' // Fill color for the center
+            ctx.fill()
+          },
+        })
+
+        var model = arc._model
+        model.backgroundColor = custom.backgroundColor
+          ? custom.backgroundColor
+          : valueAtIndexOrDefault(dataset.backgroundColor, index, arcOpts.backgroundColor)
+        model.borderWidth = custom.borderWidth
+          ? custom.borderWidth
+          : valueAtIndexOrDefault(dataset.borderWidth, index, arcOpts.borderWidth)
+        model.borderColor = custom.borderColor
+          ? custom.borderColor
+          : valueAtIndexOrDefault(dataset.borderColor, index, arcOpts.borderColor)
+        model.innerRadius = 50
+
+        // Set correct angles if not resetting
+        if (!reset || !animationOpts.animateRotate) {
+          if (index === 0) {
+            model.startAngle = opts.rotation
+          } else {
+            model.startAngle = _this.getMeta().data[index - 1]._model.endAngle
+          }
+
+          model.endAngle = model.startAngle + model.circumference
+        }
+
+        arc.pivot()
+      },
+    })
+
+    // --------------------
+
+    document.getElementById('submitBtn').addEventListener('click', function () {
+      const input = document.getElementById('dataInput').value
+      const title = document.getElementById('titleInput').value
+      let values
+      const valuesNewLine = input.split('\n')
+      if (valuesNewLine.length > 1) {
+        values = valuesNewLine
+      } else {
+        values = input.split(',')
+      }
+
+      if (input.length > 0) {
+        drawChart(values, title)
+        document.getElementById('saveBtn').style.display = 'block'
+        document.getElementById('myChart').style.display = 'block'
+      } else {
+        alert('Введіть значення через кому або кожне значення з нового рядка.')
+      }
+    })
+
+    /* document.getElementById('saveBtn').addEventListener('click', function () {
+  const canvas = document.getElementById('myChart');
+  const link = document.createElement('a');
+  link.href = canvas.toDataURL('image/jpeg');
+  link.download = 'Діаграма.jpeg';
+  link.click();
+}); */
+
+    document.getElementById('saveBtn').addEventListener('click', function () {
+      const chartCanvas = document.getElementById('myChart')
+      const chartWidth = chartCanvas.width * 3 // Increase the canvas size by 3x
+      const chartHeight = chartCanvas.height * 3
+
+      // Create a new canvas with a white background
+      const newCanvas = document.createElement('canvas')
+      newCanvas.width = chartWidth
+      newCanvas.height = chartHeight
+      const newCtx = newCanvas.getContext('2d')
+
+      // Draw a white rectangle on the new canvas
+      newCtx.fillStyle = '#ffffff'
+      newCtx.fillRect(0, 0, chartWidth, chartHeight)
+
+      // Set the image smoothing quality to high
+      newCtx.imageSmoothingQuality = 'low'
+
+      // Render the chart on the new canvas at a higher resolution
+      newCtx.drawImage(chartCanvas, 0, 0, chartWidth, chartHeight)
+
+      // Convert the new canvas to a JPEG data URL with reduced quality
+      const jpegQuality = 0.1 // Adjust the quality (0 to 1)
+      const link = document.createElement('a')
+      link.href = newCanvas.toDataURL('image/jpeg', jpegQuality)
+      link.download = 'Діаграма.jpeg'
+      link.click()
+    })
+
+    function drawChart(data, title) {
+      var config = {
+        type: 'doughnutLabels',
+        data: {
+          datasets: [
+            {
+              data: data.map((v) => 1),
+              backgroundColor: '#FFFFFF',
+              borderColor: 'black',
+              borderWidth: 2,
+            },
+          ],
+          labels: data,
+        },
+        options: {
+          circumference: Math.PI,
+          rotation: 1.0 * Math.PI,
+          defaultFontSize: 12,
+          defaultFontStyle: 'bold',
+          responsive: true,
+          legend: {
+            display: false,
+          },
+          title: {
+            display: true,
+            text: title,
+            fontSize: 18,
+            fontWeight: 'bold',
+            padding: 20,
+          },
+          tooltips: { enabled: false },
+          hover: { mode: null },
+        },
+      }
+
+      var ctx = document.getElementById('myChart').getContext('2d')
+      // Clear previous chart if exists
+      if (window.upDownChart) {
+        window.upDownChart.destroy()
+      }
+
+      // Set the canvas background to white
+      ctx.fillStyle = '#ffffff' // Set the background color to white
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+
+      window.upDownChart = new Chart(ctx, config)
+    }
+  </script>
+</html>
