@@ -17,7 +17,9 @@
       ></textarea>
       <button id="submitBtn">Згенерувати</button>
       <button id="saveBtn" style="display: none">Зберегти діаграму</button>
-      <canvas id="myChart" style="display: none" width="400" height="200"></canvas>
+      <div class="container-canvas">
+        <canvas id="myChart" style="display: none" width="800" height="400"></canvas>
+      </div>
     </div>
   </body>
   <style>
@@ -35,6 +37,21 @@
       padding: 20px;
       border-radius: 8px;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .container-canvas {
+      max-width: 800px;
+      /* width: 100%; */
+      min-height: 500px;
+      width: 90%;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
 
     h1 {
@@ -75,7 +92,7 @@
 
     canvas {
       margin-top: 20px;
-      border: 1px solid #ccc;
+      height: auto;
     }
   </style>
   <script>
@@ -327,7 +344,7 @@
           rotation: 1.0 * Math.PI,
           defaultFontSize: 12,
           defaultFontStyle: 'bold',
-          responsive: true,
+          responsive: false,
           legend: {
             display: false,
           },
@@ -352,6 +369,15 @@
       // Set the canvas background to white
       ctx.fillStyle = '#ffffff' // Set the background color to white
       ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+
+      // Get the container element
+      var container = document.querySelector('.container-canvas')
+
+      // Scale the canvas to fit the container
+      var scaleX = container.offsetWidth / ctx.canvas.width
+      var scaleY = container.offsetHeight / ctx.canvas.height
+      var scale = Math.min(scaleX, scaleY)
+      ctx.canvas.style.transform = `scale(${scale})`
 
       window.upDownChart = new Chart(ctx, config)
     }
