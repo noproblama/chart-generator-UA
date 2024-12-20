@@ -317,12 +317,18 @@
       // Render the chart on the new canvas at a higher resolution
       newCtx.drawImage(chartCanvas, 0, 0, chartWidth, chartHeight)
 
-      // Convert the new canvas to a JPEG data URL with reduced quality
-      const jpegQuality = 0.1 // Adjust the quality (0 to 1)
-      const link = document.createElement('a')
-      link.href = newCanvas.toDataURL('image/jpeg', jpegQuality)
-      link.download = 'Діаграма.jpeg'
-      link.click()
+      // Convert the new canvas to a Blob object
+      newCanvas.toBlob(
+        function (blob) {
+          // Create a download link
+          const link = document.createElement('a')
+          link.download = 'Діаграма.jpeg'
+          link.href = URL.createObjectURL(blob)
+          link.click()
+        },
+        'image/jpeg',
+        0.1
+      ) // Adjust the quality (0 to 1)
     })
 
     function drawChart(data, title) {
